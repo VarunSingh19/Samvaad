@@ -1,0 +1,355 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                    String   @id @default(cuid())
+  username              String   @unique
+  email                 String   @unique
+  password_hash         String
+  full_name             String?
+  bio                   String?
+  avatar_url            String?
+  gender                String?
+  dob                   DateTime?
+  country               String?
+  language              String   @default("en")
+  account_type          AccountType @default(USER)
+  is_verified           Boolean  @default(false)
+  is_online             Boolean  @default(false)
+  socket_id             String?
+  level                 Int      @default(1)
+  rank                  String   @default("Novice")
+  elo_rating            Int      @default(1000)
+  xp                    Int      @default(0)
+  total_debates         Int      @default(0)
+  wins                  Int      @default(0)
+  losses                Int      @default(0)
+  preferred_modes       Json?
+  preferred_types       Json?
+  notification_settings Json?
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+  last_active_at        DateTime @default(now())
+  banned_until          DateTime?
+  oauth_provider        String?
+  oauth_id              String?
+  ai_feedback_enabled   Boolean  @default(true)
+
+  // Relations
+  created_debates       Debate[] @relation("DebateCreator")
+  won_debates           Debate[] @relation("DebateWinner")
+  ai_won_debates        Debate[] @relation("AIDebateWinner")
+  participants          DebateParticipant[]
+  messages              DebateMessage[]
+  global_messages       GlobalChatMessage[]
+  ai_feedback           AIFeedback[]
+  reports_made          Report[] @relation("ReportedBy")
+  reports_received      Report[] @relation("ReportedUser")
+  achievements          Achievement[]
+  notifications         Notification[]
+  followers             Follow[] @relation("Follower")
+  following             Follow[] @relation("Followee")
+  user_settings         UserSettings?
+  audit_logs            AuditLog[]
+  matchmaking_queue     MatchmakingQueue[]
+  sent_requests        DebateRequest[] @relation("DebateRequestFrom")
+  received_requests    DebateRequest[] @relation("DebateRequestTo")
+
+  @@map("users")
+}
+
+model Debate {
+  id               String   @id @default(cuid())
+  title            String
+  topic            String
+  type             String
+  mode             DebateMode
+  chat_enabled     Boolean  @default(true)
+  visibility       DebateVisibility @default(PUBLIC)
+  duration_minutes Int      @default(30)
+  ai_moderation    Boolean  @default(true)
+  created_by       String
+  status           DebateStatus @default(PENDING)
+  created_at       DateTime @default(now())
+  started_at       DateTime?
+  ended_at         DateTime?
+  ai_summary       String?
+  winner_id        String?
+  xp_reward        Int      @default(50)
+  tags             String[]
+  language         String   @default("en")
+  views_count      Int      @default(0)
+  is_archived      Boolean  @default(false)
+  scheduled_for    DateTime?
+  ai_winner_id     String?
+  toxicity_score   Decimal?
+  recording_url    String?
+
+  // Relations
+  creator          User     @relation("DebateCreator", fields: [created_by], references: [id])
+  winner           User?    @relation("DebateWinner", fields: [winner_id], references: [id])
+  ai_winner        User?    @relation("AIDebateWinner", fields: [ai_winner_id], references: [id])
+  participants     DebateParticipant[]
+  messages         DebateMessage[]
+  global_messages  GlobalChatMessage[]
+  ai_feedback      AIFeedback[]
+  reports          Report[]
+  requests             DebateRequest[]
+
+  @@map("debates")
+}
+
+model DebateParticipant {
+  id         String   @id @default(cuid())
+  debate_id  String
+  user_id    String
+  role       ParticipantRole
+  is_winner  Boolean  @default(false)
+  is_ready   Boolean  @default(false)
+  joined_at  DateTime @default(now())
+  position   String
+  score      Int      @default(0)
+  left_at    DateTime?
+  feedback   String?
+  is_host    Boolean  @default(false)
+  xp_earned  Int      @default(0)
+
+  // Relations
+  debate     Debate   @relation(fields: [debate_id], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [user_id], references: [id])
+
+  @@unique([debate_id, user_id])
+  @@map("debate_participants")
+}
+
+model MatchmakingQueue {
+  id               String   @id @default(cuid())
+  user_id          String
+  debate_type      String
+  mode             DebateMode
+  visibility       DebateVisibility
+  chat_enabled     Boolean  @default(true)
+  duration_minutes Int      @default(30)
+  ai_moderation    Boolean  @default(true)
+  enqueued_at      DateTime @default(now())
+
+  // Relations
+  user             User     @relation(fields: [user_id], references: [id])
+
+  @@map("matchmaking_queue")
+}
+
+model DebateMessage {
+  id           String      @id @default(cuid())
+  debate_id    String
+  sender_id    String
+  content      String
+  message_type MessageType @default(ARGUMENT)
+  role         ParticipantRole
+  is_flagged   Boolean     @default(false)
+  language     String      @default("en")
+  created_at   DateTime    @default(now())
+  ai_score     Int?
+  ai_feedback  String?
+
+  // Relations
+  debate       Debate      @relation(fields: [debate_id], references: [id], onDelete: Cascade)
+  sender       User        @relation(fields: [sender_id], references: [id])
+
+  @@map("debate_messages")
+}
+
+model GlobalChatMessage {
+  id         String   @id @default(cuid())
+  debate_id  String
+  sender_id  String
+  content    String
+  is_flagged Boolean  @default(false)
+  created_at DateTime @default(now())
+
+  // Relations
+  debate     Debate   @relation(fields: [debate_id], references: [id], onDelete: Cascade)
+  sender     User     @relation(fields: [sender_id], references: [id])
+
+  @@map("global_chat_messages")
+}
+
+model AIFeedback {
+  id                String   @id @default(cuid())
+  debate_id         String
+  user_id           String
+  feedback          String
+  areas_to_improve  Json
+  strengths         Json
+  ai_score          Int
+  created_at        DateTime @default(now())
+
+  // Relations
+  debate            Debate   @relation(fields: [debate_id], references: [id], onDelete: Cascade)
+  user              User     @relation(fields: [user_id], references: [id])
+
+  @@map("ai_feedback")
+}
+
+model Report {
+  id            String      @id @default(cuid())
+  reported_by   String
+  reported_user String
+  debate_id     String?
+  reason        String
+  status        ReportStatus @default(PENDING)
+  created_at    DateTime    @default(now())
+
+  // Relations
+  reporter      User        @relation("ReportedBy", fields: [reported_by], references: [id])
+  reported      User        @relation("ReportedUser", fields: [reported_user], references: [id])
+  debate        Debate?     @relation(fields: [debate_id], references: [id])
+
+  @@map("reports")
+}
+
+model Achievement {
+  id          String   @id @default(cuid())
+  user_id     String
+  title       String
+  description String
+  icon_url    String?
+  awarded_at  DateTime @default(now())
+
+  // Relations
+  user        User     @relation(fields: [user_id], references: [id])
+
+  @@map("achievements")
+}
+
+model Notification {
+  id         String   @id @default(cuid())
+  user_id    String
+  message    String
+  link       String?
+  is_read    Boolean  @default(false)
+  created_at DateTime @default(now())
+
+  // Relations
+  user       User     @relation(fields: [user_id], references: [id])
+
+  @@map("notifications")
+}
+
+model Follow {
+  id          String   @id @default(cuid())
+  follower_id String
+  followee_id String
+  followed_at DateTime @default(now())
+
+  // Relations
+  follower    User     @relation("Follower", fields: [follower_id], references: [id])
+  followee    User     @relation("Followee", fields: [followee_id], references: [id])
+
+  @@unique([follower_id, followee_id])
+  @@map("follows")
+}
+
+model UserSettings {
+  user_id                   String  @id
+  allow_email_notifications Boolean @default(true)
+  allow_push_notifications  Boolean @default(true)
+  dark_mode                 Boolean @default(false)
+
+  // Relations
+  user                      User    @relation(fields: [user_id], references: [id])
+
+  @@map("user_settings")
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  user_id     String?
+  action      String
+  target_type String?
+  target_id   String?
+  metadata    Json?
+  timestamp   DateTime @default(now())
+
+  // Relations
+  user        User?    @relation(fields: [user_id], references: [id])
+
+  @@map("audit_logs")
+}
+
+model DebateRequest {
+  id               String   @id @default(cuid())
+  from_user_id     String
+  to_user_id       String
+  debate_topic     String
+  debate_type      String
+  mode             DebateMode
+  duration_minutes Int      @default(30)
+  status           RequestStatus @default(PENDING)
+  debate_id        String?
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  // Relations
+  from_user        User     @relation("DebateRequestFrom", fields: [from_user_id], references: [id])
+  to_user          User     @relation("DebateRequestTo", fields: [to_user_id], references: [id])
+  debate           Debate?  @relation(fields: [debate_id], references: [id])
+
+  @@map("debate_requests")
+}
+
+// Enums
+enum AccountType {
+  USER
+  ADMIN
+}
+
+enum DebateMode {
+  TEXT
+  AUDIO
+}
+
+enum DebateVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+enum DebateStatus {
+  PENDING
+  READY
+  LIVE
+  ENDED
+  CANCELLED
+}
+
+enum ParticipantRole {
+  AFFIRMATIVE
+  NEGATIVE
+  MODERATOR
+}
+
+enum MessageType {
+  ARGUMENT
+  REBUTTAL
+  SYSTEM
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWED
+  RESOLVED
+  DISMISSED
+}
+
+enum RequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
+}
