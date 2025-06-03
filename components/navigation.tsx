@@ -101,7 +101,7 @@ export function Navigation() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem asChild>
-                    <Link href="/dashboard" className="flex items-center">
+                    <Link href="/profile" className="flex items-center">
                       <User className="h-4 w-4 mr-2" />
                       Profile
                     </Link>
